@@ -1,0 +1,13 @@
+%% This line tells emacs to use -*- erlang -*- mode for this file
+
+case os:cmd("uname -m") of
+    "armv6l\n" ->
+	{port_env, PortEnv} = lists:keyfind(port_env, 1, CONFIG),
+	{"LDFLAGS", LdFlags} = lists:keyfind("LDFLAGS", 1, PortEnv),
+	NewLdFlags = lists:append(LdFlags, " -lbluetooth"),
+	NewPortEnv =
+	    lists:keystore("LDFLAGS", 1, PortEnv, {"LDFLAGS", NewLdFlags}),
+	lists:keystore(port_env, 1, CONFIG, {port_env, NewPortEnv});
+     _Else ->
+	CONFIG
+end.
