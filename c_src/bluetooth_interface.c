@@ -24,6 +24,8 @@
 // ARM architecture, we're probably on a Raspberry Pi. Include "real" Bluez headers
 #include <bluetooth/bluetooth.h>
 #include <bluetooth/rfcomm.h>
+#include <bluetooth/hci.h>
+#include <bluetooth/hci_lib.h>
 #else
 // Not on ARM, probably compiling on a PC. Include stub headers
 #include "bluetooth-stub.h"
@@ -41,6 +43,10 @@ static int load(ErlNifEnv* env, void** priv_data, ERL_NIF_TERM load_info) {
   atom_error = enif_make_atom(env, "error");
   return 0;
 }
+
+//----------------------------------------------
+// Internal functions
+//----------------------------------------------
 
 static ERL_NIF_TERM errno2atom(ErlNifEnv *env, const int error_code) {
   switch (error_code) {
@@ -66,8 +72,8 @@ static ERL_NIF_TERM make_error(ErlNifEnv *env, const int error_code) {
   return enif_make_tuple(env, 2, atom_error, errno2atom(env, error_code));
 }
 
-static ERL_NIF_TERM create_socket_nif(ErlNifEnv *env, int argc,
-				      const ERL_NIF_TERM argv[]) {
+static ERL_NIF_TERM create_rfcomm_socket_nif(ErlNifEnv *env, int argc,
+					     const ERL_NIF_TERM argv[]) {
   int optval;
   int result = socket(AF_BLUETOOTH, SOCK_STREAM, BTPROTO_RFCOMM);
   if (result < 0) {
@@ -77,6 +83,85 @@ static ERL_NIF_TERM create_socket_nif(ErlNifEnv *env, int argc,
   optval = 1;
   setsockopt(result, SOL_SOCKET, SO_REUSEADDR, &optval, sizeof(optval));
   return enif_make_tuple(env, 2, atom_ok, enif_make_int(env, result));
+}
+
+static ERL_NIF_TERM bdaddr2erlnifterm(ErlNifEnv *env, bdaddr_t *bdaddr) {
+  return enif_make_tuple(env, 6,
+			 enif_make_int(env, bdaddr->b[0]),
+			 enif_make_int(env, bdaddr->b[1]),
+			 enif_make_int(env, bdaddr->b[2]),
+			 enif_make_int(env, bdaddr->b[3]),
+			 enif_make_int(env, bdaddr->b[4]),
+			 enif_make_int(env, bdaddr->b[5]));
+}
+
+//static bdaddr_t erlnifterm2bdaddr(ErlNifEnv *env,
+//				  const ERL_NIF_TERM erlbdaddr) {
+//  int arity, i, temp;
+//  const ERL_NIF_TERM* array;
+//  bdaddr_t bdaddr;
+//  if (!enif_get_tuple(env, erlbdaddr, &arity, &array) || (arity != 6)) {
+//    exit(1);
+//  }
+//  for (i; i < arity; ++i) {
+//    if (!enif_get_int(env, array[i], &temp)) {
+//      exit(1);
+//    }
+//    bdaddr.b[i] = (uint8_t)temp;
+//  }
+//  return bdaddr;
+//}
+
+//----------------------------------------------
+// End: Internal functions
+//----------------------------------------------
+
+static ERL_NIF_TERM create_hci_socket_nif(ErlNifEnv *env, int argc,
+					  const ERL_NIF_TERM argv[]) {
+  int device_id, result;
+  device_id = hci_get_route(NULL);
+  if (device_id < 0) {
+    result = errno;
+    return make_error(env, result);
+  }
+  result = hci_open_dev(device_id);
+  if (result < 0) {
+    result = errno;
+    return make_error(env, result);
+  }
+  return enif_make_tuple(env, 2, atom_ok, enif_make_int(env, result));
+}
+
+static ERL_NIF_TERM discover_potential_peers_nif(ErlNifEnv *env, int argc,
+						 const ERL_NIF_TERM argv[]) {
+  int device_id, result, num_cycles, max_rsp, i;
+  int flags = IREQ_CACHE_FLUSH;
+  if (!enif_get_int(env, argv[0], &num_cycles) || (num_cycles <= 0)) {
+    return enif_make_badarg(env);
+  }
+  if (!enif_get_int(env, argv[1], &max_rsp) || (max_rsp <= 0)) {
+    return enif_make_badarg(env);
+  }
+  device_id = hci_get_route(NULL);
+  if (device_id < 0) {
+    result = errno;
+    return make_error(env, result);
+  }
+  inquiry_info *info = (inquiry_info*)malloc(max_rsp * sizeof(inquiry_info));
+  result = hci_inquiry(device_id, num_cycles, max_rsp, NULL, &info, flags);
+  if (result < 0) {
+    result = errno;
+    return make_error(env, result);
+  }
+  ERL_NIF_TERM address_array[result];
+  char addr[19] = { 0 };
+  for (i=0; i < result; ++i) {
+    ba2str(&(info+i)->bdaddr, addr);
+    address_array[i] = bdaddr2erlnifterm(env, &(info+i)->bdaddr);
+  }
+  free(info);
+  return enif_make_tuple2(env, atom_ok,
+			  enif_make_list_from_array(env, address_array, result));
 }
 
 static ERL_NIF_TERM bind_socket_nif(ErlNifEnv *env, int argc,
@@ -252,17 +337,21 @@ static ERL_NIF_TERM close_socket_nif(ErlNifEnv *env, int argc,
   return atom_ok;
 }
 
+
+
 static ErlNifFunc nif_funcs[] =
   {
-    {"create_rfcomm_socket_nif",    0, create_socket_nif},
-    {"bind_bt_socket_any_nif",      2, bind_socket_any_nif},
-    {"bind_bt_socket_nif",          3, bind_socket_nif},
-    {"bt_socket_listen_nif",        1, socket_listen_nif},
-    {"bt_socket_accept_nif",        1, socket_accept_nif},
-    {"bt_socket_connect_nif",       3, socket_connect_nif},
-    {"bt_socket_receive_nif",       1, socket_receive_nif},
-    {"bt_socket_send_nif",          2, socket_send_nif},
-    {"close_bt_socket_nif",         1, close_socket_nif}
+    {"create_rfcomm_socket_nif",     0, create_rfcomm_socket_nif},
+    {"create_hci_socket_nif",        0, create_hci_socket_nif},
+    {"discover_potential_peers_nif", 2, discover_potential_peers_nif},
+    {"bind_bt_socket_any_nif",       2, bind_socket_any_nif},
+    {"bind_bt_socket_nif",           3, bind_socket_nif},
+    {"bt_socket_listen_nif",         1, socket_listen_nif},
+    {"bt_socket_accept_nif",         1, socket_accept_nif},
+    {"bt_socket_connect_nif",        3, socket_connect_nif},
+    {"bt_socket_receive_nif",        1, socket_receive_nif},
+    {"bt_socket_send_nif",           2, socket_send_nif},
+    {"close_socket_nif",             1, close_socket_nif}
   };
 
 ERL_NIF_INIT(bluetooth_interface, nif_funcs, load, NULL, NULL, NULL)

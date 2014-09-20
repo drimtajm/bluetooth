@@ -27,17 +27,25 @@
 -module(bluetooth_interface).
 
 -export([create_rfcomm_socket/0, close_bt_socket/1]).
+-export([create_hci_socket/0]).
 -export([bind_bt_socket_any_device/2, bind_bt_socket/3]).
 -export([bt_socket_listen/1, bt_socket_accept/1, bt_socket_connect/3]).
 -export([bt_socket_send/2, bt_socket_receive/1]).
 -export([mac_address_to_string/1]).
+-export([discover/0, discover/1]).
 
 -define(nif_stub,
         erlang:nif_error({nif_not_loaded, module, ?MODULE, line, ?LINE})).
 
+%% The following default values are recommended by Bluez.
+%% It gives a discovery interval of 10.24 seconds.
+-define(DEFAULT_NUM_DISCOVERY_CYCLES, 8).
+-define(DEFAULT_MAX_RSP, 255).
+
 -ifndef(test).
 -on_load(on_load/0).
 -else.
+%% Need to export on_load/0 to suppress warning about otherwise unused function 
 -export([on_load/0]).
 -endif.
 
@@ -63,10 +71,13 @@ on_load() ->
 create_rfcomm_socket() ->
     create_rfcomm_socket_nif().
 
+create_hci_socket() ->
+    create_hci_socket_nif().
+
 -spec(close_bt_socket(socket()) -> ok | {error, error_code()}).
 %%% @doc This closes a bluetooth socket
 close_bt_socket(Socket) ->
-    close_bt_socket_nif(Socket).
+    close_socket_nif(Socket).
 
 -spec(bind_bt_socket_any_device(socket(), bt_channel()) -> 
 	     ok | {error, error_code()}).
@@ -106,10 +117,21 @@ bt_socket_send(Socket, Data) ->
 bt_socket_receive(Socket) ->
     bt_socket_receive_nif(Socket).
 
+discover() ->
+    discover([]).
+
+discover(Options) ->
+    NumCycles = proplists:get_value(num_discovery_cycles, Options,
+				    ?DEFAULT_NUM_DISCOVERY_CYCLES),
+    MaxRsp = proplists:get_value(max_rsp, Options, ?DEFAULT_MAX_RSP),
+    discover_potential_peers_nif(NumCycles, MaxRsp).
+
 %%%%%%%%%%%%%%%
 %% Define stubs for NIF functions
 
 create_rfcomm_socket_nif()                        -> ?nif_stub.
+create_hci_socket_nif()                           -> ?nif_stub.
+discover_potential_peers_nif(_NumCycles, _MaxRsp) -> ?nif_stub.
 bind_bt_socket_any_nif(_Socket, _Channel)         -> ?nif_stub.
 bind_bt_socket_nif(_Socket, _Channel, _Mac)       -> ?nif_stub.
 bt_socket_listen_nif(_Socket)                     -> ?nif_stub.
@@ -117,7 +139,7 @@ bt_socket_accept_nif(_Socket)                     -> ?nif_stub.
 bt_socket_connect_nif(_Socket, _Port, _RemoteMac) -> ?nif_stub.
 bt_socket_send_nif(_Socket, _Data)                -> ?nif_stub.
 bt_socket_receive_nif(_Socket)                    -> ?nif_stub.
-close_bt_socket_nif(_Socket)                      -> ?nif_stub.
+close_socket_nif(_Socket)                         -> ?nif_stub.
 
 %%
 %%%%%%%%%%%%%%%
