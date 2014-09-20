@@ -157,11 +157,65 @@ static ERL_NIF_TERM discover_potential_peers_nif(ErlNifEnv *env, int argc,
   char addr[19] = { 0 };
   for (i=0; i < result; ++i) {
     ba2str(&(info+i)->bdaddr, addr);
-    address_array[i] = bdaddr2erlnifterm(env, &(info+i)->bdaddr);
+    address_array[i] = enif_make_string(env, addr, ERL_NIF_LATIN1);
+      //bdaddr2erlnifterm(env, &(info+i)->bdaddr);
   }
   free(info);
   return enif_make_tuple2(env, atom_ok,
 			  enif_make_list_from_array(env, address_array, result));
+}
+
+static ERL_NIF_TERM get_remote_name_nif(ErlNifEnv *env, int argc,
+					const ERL_NIF_TERM argv[]) {
+  int sock, result;
+  char mac_address[18], name[248];
+  bdaddr_t bdaddr;
+  if (!enif_get_int(env, argv[0], &sock) || (sock < 0)) {
+    return enif_make_badarg(env);
+  }
+  if (enif_get_string(env, argv[1], mac_address, 18, ERL_NIF_LATIN1) <= 0) {
+    return enif_make_badarg(env);
+  }
+  str2ba(mac_address, &bdaddr);
+  result = hci_read_remote_name(sock, &bdaddr, sizeof(name), name, 0);
+  if (result < 0) {
+    return enif_make_tuple2(env, atom_ok, enif_make_atom(env, "unknown"));
+  }
+  return enif_make_tuple2(env, atom_ok,
+			  enif_make_string(env, name, ERL_NIF_LATIN1));
+}
+
+static ERL_NIF_TERM get_local_name_nif(ErlNifEnv *env, int argc,
+				       const ERL_NIF_TERM argv[]) {
+  int sock, result;
+  char name[248];
+  if (!enif_get_int(env, argv[0], &sock) || (sock < 0)) {
+    return enif_make_badarg(env);
+  }
+  result = hci_read_local_name(sock, sizeof(name), name, 0);
+  if (result < 0) {
+    return enif_make_tuple2(env, atom_ok, enif_make_atom(env, "unknown"));
+  }
+  return enif_make_tuple2(env, atom_ok,
+			  enif_make_string(env, name, ERL_NIF_LATIN1));
+}
+
+static ERL_NIF_TERM set_local_name_nif(ErlNifEnv *env, int argc,
+				       const ERL_NIF_TERM argv[]) {
+  int sock, result;
+  char name[248];
+  if (!enif_get_int(env, argv[0], &sock) || (sock < 0)) {
+    return enif_make_badarg(env);
+  }
+  if (enif_get_string(env, argv[1], name, 248, ERL_NIF_LATIN1) <= 0) {
+    return enif_make_badarg(env);
+  }
+  result = hci_write_local_name(sock, name, 0);
+  if (result < 0) {
+    result = errno;
+    return make_error(env, result);
+  }
+  return atom_ok;
 }
 
 static ERL_NIF_TERM bind_socket_nif(ErlNifEnv *env, int argc,
@@ -344,6 +398,9 @@ static ErlNifFunc nif_funcs[] =
     {"create_rfcomm_socket_nif",     0, create_rfcomm_socket_nif},
     {"create_hci_socket_nif",        0, create_hci_socket_nif},
     {"discover_potential_peers_nif", 2, discover_potential_peers_nif},
+    {"get_remote_name_nif",          2, get_remote_name_nif},
+    {"get_local_name_nif",           1, get_local_name_nif},
+    {"set_local_name_nif",           2, set_local_name_nif},
     {"bind_bt_socket_any_nif",       2, bind_socket_any_nif},
     {"bind_bt_socket_nif",           3, bind_socket_nif},
     {"bt_socket_listen_nif",         1, socket_listen_nif},
