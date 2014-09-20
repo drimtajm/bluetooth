@@ -1,0 +1,7 @@
+%% -*- erlang -*-
+{application, bluetooth,
+ [{description, "Bluetooth driver for Erlang"},
+  {vsn, "1"},
+  {modules, [bluetooth_interface,
+	     bluetooth_server_test, bluetooth_client_test]}
+ ]}.
