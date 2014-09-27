@@ -121,7 +121,9 @@ bt_socket_receive(Socket) ->
 discover() ->
     discover([]).
 
-discover(Options) ->
+discover(quick) ->
+    discover([{num_discovery_cycles, 2}, {max_rsp, 5}]);
+discover(Options) when is_list(Options) ->
     NumCycles = proplists:get_value(num_discovery_cycles, Options,
 				    ?DEFAULT_NUM_DISCOVERY_CYCLES),
     MaxRsp = proplists:get_value(max_rsp, Options, ?DEFAULT_MAX_RSP),
