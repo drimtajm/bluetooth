@@ -5,11 +5,12 @@ An embryo for an Erlang bluetooth application.<br><br>
 
 Prerequisites
 -------------
-1. Install Bluez
-2. To enable bluetooth adapter and put it in scan mode, do:
-
+1. Install Bluez (5.10)
+2. To enable the bluetooth adapter and put it in scan mode, do:<br>
+<pre>
    sudo hciconfig hci0 up
    sudo hciconfig hci0 piscan
+</pre>
 
 Example run - handling names
 ----------------------------
