@@ -26,3 +26,10 @@ Example run - handling names
 	{ok,["00:02:72:C0:63:F4"]}
 	5> bluetooth_interface:get_remote_name(hd(Addrs)).
 	{ok,"datorbebis"}
+
+Debugging
+---------
+Install package bluez-hcidump and dump all traffic with
+<pre>
+  sudo hcidump hci0 -X
+</pre>
