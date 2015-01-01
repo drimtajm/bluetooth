@@ -38,6 +38,14 @@
 -define(nif_stub,
 	erlang:nif_error({nif_not_loaded, module, ?MODULE, line, ?LINE})).
 
+-define(debug_flag, true).
+-define(debug(Function, String),
+	       case ?debug_flag of
+		   false -> ok;
+		   true  -> io:format("~p:~p():~p"++String++"~n",
+				      [?MODULE, Function, ?LINE])
+	       end).
+
 %% The following default values are recommended by Bluez.
 %% It gives a discovery interval of 10.24 seconds.
 -define(DEFAULT_NUM_DISCOVERY_CYCLES, 8).
@@ -70,14 +78,17 @@ on_load() ->
 -spec(create_rfcomm_socket() -> {ok, socket()} | {error, error_code()}).
 %%% @doc This creates an RFCOMM bluetooth socket and returns the socket handle
 create_rfcomm_socket() ->
+    ?debug(create_rfcomm_socket, ""),
     create_rfcomm_socket_nif().
 
 create_hci_socket() ->
+    ?debug(create_hci_socket, ""),
     create_hci_socket_nif().
 
 -spec(close_socket(socket()) -> ok | {error, error_code()}).
 %%% @doc This closes a bluetooth socket
 close_socket(Socket) ->
+    ?debug(close_socket, lists:concat([", socket=", Socket])),
     close_socket_nif(Socket).
 
 -spec(bind_bt_socket_any_device(socket(), bt_channel()) ->
@@ -85,6 +96,8 @@ close_socket(Socket) ->
 %%% @doc This binds a bluetooth socket to an RFCOMM port,
 %%%      using the first available bluetooth device
 bind_bt_socket_any_device(Socket, Channel) ->
+    ?debug(bind_bt_socket_any_device, lists:concat([", socket=", Socket,
+						    ", channel=", Channel])),
     bind_bt_socket_any_nif(Socket, Channel).
 
 -spec(bind_bt_socket(socket(), bt_channel(), string()) ->
@@ -93,6 +106,8 @@ bind_bt_socket_any_device(Socket, Channel) ->
 %%%      using the device with the specified mac address
 bind_bt_socket(Socket, Channel, MacAddressString) ->
 %%    MacAddressString = mac_address_to_string(MacAddress),
+    ?debug(bind_bt_socket, lists:concat([", socket=", Socket,
+					 ", channel=", Channel])),
     bind_bt_socket_nif(Socket, Channel, MacAddressString).
 
 
@@ -103,25 +118,37 @@ mac_address_to_string(MacAddress) ->
 		    [A, B, C, D, E, F])).
 
 bt_socket_listen(Socket) ->
+    ?debug(bt_socket_listen, lists:concat([", socket=", Socket])),
     bt_socket_listen_nif(Socket).
 
 bt_socket_accept(Socket) ->
+    ?debug(bt_socket_accept, lists:concat([", socket=", Socket])),
     bt_socket_accept_nif(Socket).
 
 bt_socket_connect(Socket, Port, MacAddressString) ->
     %%MacAddressString = mac_address_to_string(RemoteMac),
+    ?debug(bt_socket_connect, lists:concat([", socket=", Socket,
+					    ", port=", Port,
+					    ", remote_mac=",
+					    MacAddressString])),
     bt_socket_connect_nif(Socket, Port, MacAddressString).
 
-bt_socket_send(Socket, Data) ->
+bt_socket_send(Socket, Data) when is_list(Data) ->
+    bt_socket_send(Socket, list_to_binary(Data));
+bt_socket_send(Socket, Data) when is_binary(Data) ->
+    ?debug(bt_socket_send, lists:concat([", socket=", Socket])),
     bt_socket_send_nif(Socket, Data).
 
 bt_socket_receive(Socket) ->
+    ?debug(bt_socket_receive, lists:concat([", socket=", Socket])),
     bt_socket_receive_nif(Socket).
 
 discover() ->
+    ?debug(discover, ""),
     discover([]).
 
 discover(Options) ->
+    ?debug(discover, lists:concat([", options=", Options])),
     NumCycles = proplists:get_value(num_discovery_cycles, Options,
 				    ?DEFAULT_NUM_DISCOVERY_CYCLES),
     MaxRsp = proplists:get_value(max_rsp, Options, ?DEFAULT_MAX_RSP),
@@ -130,18 +157,21 @@ discover(Options) ->
 get_remote_name(MacAddress) when is_tuple(MacAddress) ->
     get_remote_name(mac_address_to_string(MacAddress));
 get_remote_name(MacAddress) ->
+    ?debug(get_remote_name, lists:concat([", remote_mac=", MacAddress])),
     {ok, Socket} = create_hci_socket(),
     {ok, Name} = get_remote_name_nif(Socket, MacAddress),
     close_socket(Socket),
     {ok, Name}.
 
 get_local_name() ->
+    ?debug(get_local_name, ""),
     {ok, Socket} = create_hci_socket(),
     Result = get_local_name_nif(Socket),
     close_socket(Socket),
     Result.
 
 set_local_name(Name) when is_list(Name) ->
+    ?debug(set_local_name, lists:concat([",name=", Name])),
     {ok, Socket} = create_hci_socket(),
     Result = set_local_name_nif(Socket, Name),
     close_socket(Socket),

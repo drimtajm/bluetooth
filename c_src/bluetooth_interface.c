@@ -18,6 +18,7 @@
 #include <unistd.h>
 #include <errno.h>
 #include <sys/socket.h>
+#include <fcntl.h>
 #include <string.h>
 
 #ifdef __ARM_EABI__
@@ -49,6 +50,7 @@ static int load(ErlNifEnv* env, void** priv_data, ERL_NIF_TERM load_info) {
 //----------------------------------------------
 
 static ERL_NIF_TERM errno2atom(ErlNifEnv *env, const int error_code) {
+  //  return enif_make_atom(env, strerror(error_code));
   switch (error_code) {
   case EACCES:       return enif_make_atom(env, "eacces");
   case EINVAL:       return enif_make_atom(env, "einval");
@@ -58,6 +60,8 @@ static ERL_NIF_TERM errno2atom(ErlNifEnv *env, const int error_code) {
   case EADDRINUSE:   return enif_make_atom(env, "eaddrinuse");
   case ECONNREFUSED: return enif_make_atom(env, "econnrefused");
   case ECONNRESET:   return enif_make_atom(env, "econnreset");
+  case EINPROGRESS:  return enif_make_atom(env, "einprogress");
+  case EINTR:        return enif_make_atom(env, "eintr");
   case ENOTCONN:     return enif_make_atom(env, "enotconn");
   case EHOSTUNREACH: return enif_make_atom(env, "ehostunreach");
   case EHOSTDOWN:    return enif_make_atom(env, "ehostdown");
@@ -80,6 +84,12 @@ static ERL_NIF_TERM create_rfcomm_socket_nif(ErlNifEnv *env, int argc,
     result = errno;
     return make_error(env, result);
   }
+//  int options = fcntl(result, F_GETFL);
+//  int res2 = fcntl(result, F_SETFL, options & (~O_NONBLOCK));
+//  if (res2 < 0) {
+//    res2 = errno;
+//    return make_error(env, res2);
+//  }
   optval = 1;
   setsockopt(result, SOL_SOCKET, SO_REUSEADDR, &optval, sizeof(optval));
   return enif_make_tuple(env, 2, atom_ok, enif_make_int(env, result));

@@ -2,7 +2,8 @@
 -compile([export_all]).
 
 -define(HOSTS, {{pepparkakehus, "00:02:72:c0:64:11"},
-                {datorbebis,    "00:02:72:C0:63:F4"}}).
+%%                {datorbebis,    "00:02:72:C0:63:F4"},
+	        {hogwarts,      "44:33:4C:1B:CC:F0"}}).
 -define(PORT, 13).
 
 get_localhost() ->
@@ -21,27 +22,37 @@ get_mac_addresses() ->
 
 socket_connector(Caller, Socket, RemoteMac) ->
     case bluetooth_interface:bt_socket_connect(Socket, ?PORT, RemoteMac) of
-        ok ->
-	    Data = erlang:term_to_binary({self(), greetings}),
-	    case bluetooth_interface:bt_socket_send(Socket, Data) of
-                  ok ->
-                      io:format("message sent to server. data: ~p~n",
-				[binary_to_term(Data)]);
-		{error, ErrorCode} -> print_error('send', ErrorCode)
-              end;
-        {error, ErrorCode} -> print_error('connect', ErrorCode)
-    end,
-    bluetooth_interface:bt_socket_send(Socket, term_to_binary("hej")),
-    bluetooth_interface:bt_socket_send(Socket, term_to_binary("och")),
-    bluetooth_interface:bt_socket_send(Socket, term_to_binary("ho")),
+        ok -> socket_is_connected(Socket, Caller);
+        {error, ErrorCode} -> print_error('connect', ErrorCode),
+			      cleanup(Caller)
+    end.
+
+socket_is_connected(Socket, Caller) ->
+    Data = erlang:term_to_binary({self(), greetings}),
+    case send(Socket, Data) of
+	ok ->
+	    io:format("message sent to server. data: ~p~n",
+		      [binary_to_term(Data)]),
+	    socket_sending_successful(Socket, Caller);
+	{error, ErrorCode} -> print_error('send', ErrorCode),
+			      cleanup(Caller)
+    end.
+
+socket_sending_successful(Socket, Caller) ->
+    send(Socket, term_to_binary("hej")),
+    send(Socket, term_to_binary("och")),
+    send(Socket, term_to_binary("ho")),
     Data2 = term_to_binary("Bye!"),
-    case bluetooth_interface:bt_socket_send(Socket, Data2) of
+    case send(Socket, Data2) of
 	ok ->
 	    io:format("message sent to server. data: ~p~n", [Data2]);
 	{error, ErrorCode2} -> print_error('send', ErrorCode2)
     end,
     %% delay for 10 seconds
     timer:sleep(10000),
+    cleanup(Caller).
+
+cleanup(Caller) ->
     Caller ! {self(), done},
     ok.
 
@@ -49,6 +60,7 @@ print_error(Operation, ErrorCode) ->
     io:format("~p failed with error code: ~p~n", [Operation, ErrorCode]).
 
 go() ->
+%%    bluetooth_interface:set_local_name(atom_to_list(get_localhost())),
     {{local, _LocalMac}, {remote, RemoteMac}} = get_mac_addresses(),
     {ok, Socket} = bluetooth_interface:create_rfcomm_socket(),
     continue(Socket, RemoteMac),
@@ -56,7 +68,7 @@ go() ->
 %%        ok                 -> continue(Socket, RemoteMac);
 %%        {error, ErrorCode} -> print_error('bind', ErrorCode)
 %%    end,
-    bluetooth_interface:close_bt_socket(Socket).
+    bluetooth_interface:close_socket(Socket).
 
 continue(Socket, RemoteMac) ->
     Pid = spawn(?MODULE, socket_connector, [self(), Socket, RemoteMac]),
@@ -65,3 +77,7 @@ continue(Socket, RemoteMac) ->
     after 60000 ->
             io:format("timeout!~n")
     end.
+
+send(Socket, Data) ->
+    bluetooth_interface:bt_socket_send(Socket,
+				       [<<(byte_size(Data)):16>>, Data]).
