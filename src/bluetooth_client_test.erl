@@ -63,6 +63,9 @@ go() ->
 %%    bluetooth_interface:set_local_name(atom_to_list(get_localhost())),
     {{local, _LocalMac}, {remote, RemoteMac}} = get_mac_addresses(),
     {ok, Socket} = bluetooth_interface:create_rfcomm_socket(),
+    {ok, SecuritySetting} = bluetooth_interface:get_bt_security_setting(Socket),
+    io:format("Create ok, Socket handle: ~p, security setting: ~p~n",
+	      [Socket, SecuritySetting]),
     continue(Socket, RemoteMac),
 %%    case bluetooth_interface:bind_bt_socket(Socket, ?PORT, LocalMac) of
 %%        ok                 -> continue(Socket, RemoteMac);

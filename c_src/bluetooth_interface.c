@@ -76,23 +76,8 @@ static ERL_NIF_TERM make_error(ErlNifEnv *env, const int error_code) {
   return enif_make_tuple(env, 2, atom_error, errno2atom(env, error_code));
 }
 
-static ERL_NIF_TERM create_rfcomm_socket_nif(ErlNifEnv *env, int argc,
-					     const ERL_NIF_TERM argv[]) {
-  int optval;
-  int result = socket(AF_BLUETOOTH, SOCK_STREAM, BTPROTO_RFCOMM);
-  if (result < 0) {
-    result = errno;
-    return make_error(env, result);
-  }
-//  int options = fcntl(result, F_GETFL);
-//  int res2 = fcntl(result, F_SETFL, options & (~O_NONBLOCK));
-//  if (res2 < 0) {
-//    res2 = errno;
-//    return make_error(env, res2);
-//  }
-  optval = 1;
-  setsockopt(result, SOL_SOCKET, SO_REUSEADDR, &optval, sizeof(optval));
-  return enif_make_tuple(env, 2, atom_ok, enif_make_int(env, result));
+static ERL_NIF_TERM make_successful_result(ErlNifEnv *env, const ERL_NIF_TERM result) {
+  return enif_make_tuple(env, 2, atom_ok, result);
 }
 
 static ERL_NIF_TERM bdaddr2erlnifterm(ErlNifEnv *env, bdaddr_t *bdaddr) {
@@ -126,6 +111,25 @@ static ERL_NIF_TERM bdaddr2erlnifterm(ErlNifEnv *env, bdaddr_t *bdaddr) {
 // End: Internal functions
 //----------------------------------------------
 
+static ERL_NIF_TERM create_rfcomm_socket_nif(ErlNifEnv *env, int argc,
+					     const ERL_NIF_TERM argv[]) {
+  int optval;
+  int result = socket(AF_BLUETOOTH, SOCK_STREAM, BTPROTO_RFCOMM);
+  if (result < 0) {
+    result = errno;
+    return make_error(env, result);
+  }
+//  int options = fcntl(result, F_GETFL);
+//  int res2 = fcntl(result, F_SETFL, options & (~O_NONBLOCK));
+//  if (res2 < 0) {
+//    res2 = errno;
+//    return make_error(env, res2);
+//  }
+  optval = 1;
+  setsockopt(result, SOL_SOCKET, SO_REUSEADDR, &optval, sizeof(optval));
+  return make_successful_result(env, enif_make_int(env, result));
+}
+
 static ERL_NIF_TERM create_hci_socket_nif(ErlNifEnv *env, int argc,
 					  const ERL_NIF_TERM argv[]) {
   int device_id, result;
@@ -139,7 +143,35 @@ static ERL_NIF_TERM create_hci_socket_nif(ErlNifEnv *env, int argc,
     result = errno;
     return make_error(env, result);
   }
-  return enif_make_tuple(env, 2, atom_ok, enif_make_int(env, result));
+  return make_successful_result(env, enif_make_int(env, result));
+}
+
+static ERL_NIF_TERM get_bt_security_setting_nif(ErlNifEnv *env, int argc,
+						const ERL_NIF_TERM argv[]) {
+  int sock, result;
+  if (!enif_get_int(env, argv[0], &sock) || (sock < 0)) {
+    return enif_make_badarg(env);
+  }
+  struct bt_security security = { 0 };
+  socklen_t len = sizeof(security);
+  result = getsockopt(sock, SOL_BLUETOOTH, BT_SECURITY,
+		      &security, &len);
+  if (result < 0) {
+    result = errno;
+    return make_error(env, result);
+  }
+  switch (security.level) {
+  case BT_SECURITY_SDP:
+    return make_successful_result(env, enif_make_atom(env, "BT_SECURITY_SDP"));
+  case BT_SECURITY_LOW:
+    return make_successful_result(env, enif_make_atom(env, "BT_SECURITY_LOW"));
+  case BT_SECURITY_MEDIUM:
+    return make_successful_result(env, enif_make_atom(env, "BT_SECURITY_MEDIUM"));
+  case BT_SECURITY_HIGH:
+    return make_successful_result(env, enif_make_atom(env, "BT_SECURITY_HIGH"));
+  default:
+    return make_successful_result(env, enif_make_atom(env, "UNKNOWN"));
+  }
 }
 
 static ERL_NIF_TERM discover_potential_peers_nif(ErlNifEnv *env, int argc,
@@ -171,8 +203,9 @@ static ERL_NIF_TERM discover_potential_peers_nif(ErlNifEnv *env, int argc,
       //bdaddr2erlnifterm(env, &(info+i)->bdaddr);
   }
   free(info);
-  return enif_make_tuple2(env, atom_ok,
-			  enif_make_list_from_array(env, address_array, result));
+  return make_successful_result(env, enif_make_list_from_array(env,
+							       address_array,
+							       result));
 }
 
 static ERL_NIF_TERM get_remote_name_nif(ErlNifEnv *env, int argc,
@@ -189,10 +222,10 @@ static ERL_NIF_TERM get_remote_name_nif(ErlNifEnv *env, int argc,
   str2ba(mac_address, &bdaddr);
   result = hci_read_remote_name(sock, &bdaddr, sizeof(name), name, 0);
   if (result < 0) {
-    return enif_make_tuple2(env, atom_ok, enif_make_atom(env, "unknown"));
+    return make_successful_result(env, enif_make_atom(env, "unknown"));
   }
-  return enif_make_tuple2(env, atom_ok,
-			  enif_make_string(env, name, ERL_NIF_LATIN1));
+  return make_successful_result(env,
+				enif_make_string(env, name, ERL_NIF_LATIN1));
 }
 
 static ERL_NIF_TERM get_local_name_nif(ErlNifEnv *env, int argc,
@@ -204,10 +237,10 @@ static ERL_NIF_TERM get_local_name_nif(ErlNifEnv *env, int argc,
   }
   result = hci_read_local_name(sock, sizeof(name), name, 0);
   if (result < 0) {
-    return enif_make_tuple2(env, atom_ok, enif_make_atom(env, "unknown"));
+    return make_successful_result(env, enif_make_atom(env, "unknown"));
   }
-  return enif_make_tuple2(env, atom_ok,
-			  enif_make_string(env, name, ERL_NIF_LATIN1));
+  return make_successful_result(env,
+				enif_make_string(env, name, ERL_NIF_LATIN1));
 }
 
 static ERL_NIF_TERM set_local_name_nif(ErlNifEnv *env, int argc,
@@ -407,6 +440,7 @@ static ErlNifFunc nif_funcs[] =
   {
     {"create_rfcomm_socket_nif",     0, create_rfcomm_socket_nif},
     {"create_hci_socket_nif",        0, create_hci_socket_nif},
+    {"get_bt_security_setting_nif",  1, get_bt_security_setting_nif},
     {"discover_potential_peers_nif", 2, discover_potential_peers_nif},
     {"get_remote_name_nif",          2, get_remote_name_nif},
     {"get_local_name_nif",           1, get_local_name_nif},

@@ -28,6 +28,7 @@
 
 -export([create_rfcomm_socket/0, close_socket/1]).
 -export([create_hci_socket/0]).
+-export([get_bt_security_setting/1]).
 -export([bind_bt_socket_any_device/2, bind_bt_socket/3]).
 -export([bt_socket_listen/1, bt_socket_accept/1, bt_socket_connect/3]).
 -export([bt_socket_send/2, bt_socket_receive/1]).
@@ -81,9 +82,18 @@ create_rfcomm_socket() ->
     ?debug(create_rfcomm_socket, ""),
     create_rfcomm_socket_nif().
 
+-spec(create_hci_socket() -> {ok, socket()} | {error, error_code()}).
+%%% @doc This creates a HCI bluetooth socket and returns the socket handle
 create_hci_socket() ->
     ?debug(create_hci_socket, ""),
     create_hci_socket_nif().
+
+-spec(get_bt_security_setting(socket()) -> {ok, atom()} | {error, error_code()}).
+%%% @doc This queries the security setting on an open bluetooth socket and
+%%       returns it as an atom
+get_bt_security_setting(Socket) ->
+    ?debug(get_bt_security_setting, lists:concat([", socket=", Socket])),
+    get_bt_security_setting_nif(Socket).
 
 -spec(close_socket(socket()) -> ok | {error, error_code()}).
 %%% @doc This closes a bluetooth socket
@@ -183,6 +193,7 @@ set_local_name(Name) when is_list(Name) ->
 
 create_rfcomm_socket_nif()                        -> ?nif_stub.
 create_hci_socket_nif()                           -> ?nif_stub.
+get_bt_security_setting_nif(_Socket)              -> ?nif_stub.
 discover_potential_peers_nif(_NumCycles, _MaxRsp) -> ?nif_stub.
 get_remote_name_nif(_Socket, _MacAddress)         -> ?nif_stub.
 get_local_name_nif(_Socket)                       -> ?nif_stub.

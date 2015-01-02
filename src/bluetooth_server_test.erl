@@ -68,7 +68,9 @@ print_error(Operation, ErrorCode) ->
 go() ->
     {{local, LocalMac}, {remote, _RemoteMac}} = get_mac_addresses(),
     {ok, Socket} = bluetooth_interface:create_rfcomm_socket(),
-    io:format("Create ok, Socket handle: ~w~n", [Socket]),
+    {ok, SecuritySetting} = bluetooth_interface:get_bt_security_setting(Socket),
+    io:format("Create ok, Socket handle: ~p, security setting: ~p~n",
+	      [Socket, SecuritySetting]),
     case bluetooth_interface:bind_bt_socket_any_device(Socket, ?PORT) of
         ok -> {ok, Name} = bluetooth_interface:get_local_name(), 
 	      io:format("Bind ok, device: ~p~n", [Name]),
