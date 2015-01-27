@@ -14,8 +14,9 @@ socket_acceptor(Caller, Socket) ->
     ok.
 
 receive_loop(Socket, Pending) ->
+    ByeMessage = term_to_binary("Bye!"),
     case myreceive(Socket, Pending) of
-	{ok, <<"Bye!">>, _NewPending} ->
+	{ok, ByeMessage, _NewPending} ->
 	    io:format("Received 'Bye!' message from client~n");
 	{error, ErrorCode}  ->
 	    print_error('receive', ErrorCode);
