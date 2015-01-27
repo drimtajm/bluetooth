@@ -1,24 +1,7 @@
 -module(bluetooth_server_test).
 -compile([export_all]).
 
--define(HOSTS, {{pepparkakehus, "00:02:72:c0:64:11"},
-%%                {datorbebis,    "00:02:72:C0:63:F4"},
-	        {hogwarts,      "44:33:4C:1B:CC:F0"}}).
--define(PORT, 13).
-
-get_localhost() ->
-    list_to_atom([X || X <- string:to_lower(os:cmd("hostname")),
-		       (((X>=$a) and (X=<$z)) orelse ((X>=$0) and (X=<$9)))]).
-
-get_mac_addresses() ->
-    Localhost = get_localhost(),
-    case ?HOSTS of
-	{{Localhost, LocalMac1}, {_RemoteHost1, RemoteMac1}} ->
-	    {{local, LocalMac1}, {remote, RemoteMac1}};
-	{{_RemoteHost2, RemoteMac2}, {Localhost, LocalMac2}} ->
-	    {{local, LocalMac2}, {remote, RemoteMac2}};
-	_Else -> undefined
-    end.
+-include("../include/client_server_info.hrl").
 
 socket_acceptor(Caller, Socket) ->
     case bluetooth_interface:bt_socket_accept(Socket) of
@@ -41,32 +24,16 @@ receive_loop(Socket, Pending) ->
 		      [byte_size(Bin), Bin]),
 	    io:format("Received: ~p~n", [binary_to_term(Bin)]),
 	    receive_loop(Socket, NewPending)
-%%	    Array = extract_data(Count, Bin, []),
-%%	    lists:foreach(
-%%	      fun (Term) -> io:format("Received: ~p~n", [Term]) end, Array),
-%%	    case (lists:member("Bye!", Array)) of
-%%		true  -> receive_loop(Socket);
-%%		false -> ok
-%%	    end
     end.
-
-%%extract_data(Count, Bin, Result) ->
-%%    Term = binary_to_term(Bin),
-%%    NewBin = term_to_binary(Term),
-%%    case byte_size(NewBin) of
-%%	Count ->
-%%	    lists:reverse([Term | Result]);
-%%	LCount when LCount < Count ->
-%%	    RestBinary = binary_part(Bin, Count, LCount - Count),
-%%	    extract_data(Count - LCount, RestBinary, [Term | Result])
-%%    end.    
 
 print_error(Operation, ErrorCode) ->
     io:format("~p failed with error code: ~p~n", [Operation, ErrorCode]).
 
     
 go() ->
-    {{local, LocalMac}, {remote, _RemoteMac}} = get_mac_addresses(),
+    bluetooth_interface:set_local_name(atom_to_list(get_localhost())),
+    LocalMac = proplists:get_value(get_localhost(), ?HOSTS),
+    io:format("Local MAC address: ~p~n", [LocalMac]),
     {ok, Socket} = bluetooth_interface:create_rfcomm_socket(),
     {ok, SecuritySetting} = bluetooth_interface:get_bt_security_setting(Socket),
     io:format("Create ok, Socket handle: ~p, security setting: ~p~n",
