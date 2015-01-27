@@ -29,7 +29,7 @@ receive_loop(Socket, Pending) ->
 print_error(Operation, ErrorCode) ->
     io:format("~p failed with error code: ~p~n", [Operation, ErrorCode]).
 
-    
+
 go() ->
     bluetooth_interface:set_local_name(atom_to_list(get_localhost())),
     LocalMac = proplists:get_value(get_localhost(), ?HOSTS),
@@ -39,7 +39,7 @@ go() ->
     io:format("Create ok, Socket handle: ~p, security setting: ~p~n",
 	      [Socket, SecuritySetting]),
     case bluetooth_interface:bind_bt_socket_any_device(Socket, ?PORT) of
-        ok -> {ok, Name} = bluetooth_interface:get_local_name(), 
+        ok -> {ok, Name} = bluetooth_interface:get_local_name(),
 	      io:format("Bind ok, device: ~p~n", [Name]),
 	      case bluetooth_interface:bt_socket_listen(Socket) of
 		  ok                 -> io:format("Listen ok~n"),

@@ -47,12 +47,12 @@ go() ->
 
 go(Server) ->
     bluetooth_interface:set_local_name(atom_to_list(get_localhost())),
-    RemoteMac = proplists:get_value(RemoteHost, ?HOSTS),
+    RemoteMac = proplists:get_value(Server, ?HOSTS),
     if (RemoteMac == undefined) ->           %% verify MAC address is found
 	    error(unknown_host);
        true -> ok
     end,
-    io:format("Remote MAC address: ~p~n", [RemoteMac]),    
+    io:format("Remote MAC address: ~p~n", [RemoteMac]),
     {ok, Socket} = bluetooth_interface:create_rfcomm_socket(),
     {ok, SecuritySetting} = bluetooth_interface:get_bt_security_setting(Socket),
     io:format("Create ok, Socket handle: ~p, security setting: ~p~n",
