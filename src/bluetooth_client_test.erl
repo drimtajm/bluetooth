@@ -1,8 +1,8 @@
 -module(bluetooth_client_test).
 -compile([export_all]).
 
--define(HOSTS, {{pepparkakehus, "00:02:72:c0:64:11"},
-                {datorbebis,    "00:02:72:C0:63:F4"}}).
+-define(HOSTS, {{gizmo,     "7C:C7:08:61:19:56"},
+                {kalleanka, "7C:C7:08:DD:8F:19"}}).
 -define(PORT, 13).
 
 get_localhost() ->
@@ -11,6 +11,7 @@ get_localhost() ->
 
 get_mac_addresses() ->
     Localhost = get_localhost(),
+    %%proplists:get_value(Localhost, ?HOSTS)
     case ?HOSTS of
         {{Localhost, LocalMac1}, {_RemoteHost1, RemoteMac1}} ->
 	    {{local, LocalMac1}, {remote, RemoteMac1}};
