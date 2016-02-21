@@ -6,8 +6,8 @@
 -define(PORT, 13).
 
 get_localhost() ->
-    list_to_atom([X || X <- string:to_lower(os:cmd("hostname")),
-		       (((X>=$a) and (X=<$z)) orelse ((X>=$0) and (X=<$9)))]).
+   {ok, Hostname} = inet:gethostname(),
+   list_to_atom(Hostname).
 
 get_mac_addresses() ->
     Localhost = get_localhost(),
@@ -16,7 +16,8 @@ get_mac_addresses() ->
 	    {{local, LocalMac1}, {remote, RemoteMac1}};
 	{{_RemoteHost2, RemoteMac2}, {Localhost, LocalMac2}} ->
 	    {{local, LocalMac2}, {remote, RemoteMac2}};
-	_Else -> undefined
+	_Else ->
+	  io:format("Not found! ?HOSTS: ~p~n", [?HOSTS])
     end.
 
 socket_acceptor(Caller, Socket) ->
