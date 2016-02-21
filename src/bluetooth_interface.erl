@@ -134,19 +134,19 @@ get_remote_name(MacAddress) when is_tuple(MacAddress) ->
 get_remote_name(MacAddress) ->
     {ok, Socket} = create_hci_socket(),
     {ok, Name} = get_remote_name_nif(Socket, MacAddress),
-    close_socket(Socket),
+    close_bt_socket(Socket),
     {ok, Name}.
 
 get_local_name() ->
     {ok, Socket} = create_hci_socket(),
     Result = get_local_name_nif(Socket),
-    close_socket(Socket),
+    close_bt_socket(Socket),
     Result.
 
 set_local_name(Name) when is_list(Name) ->
     {ok, Socket} = create_hci_socket(),
     Result = set_local_name_nif(Socket, Name),
-    close_socket(Socket),
+    close_bt_socket(Socket),
     Result.
 
 
@@ -166,7 +166,7 @@ bt_socket_accept_nif(_Socket)                     -> ?nif_stub.
 bt_socket_connect_nif(_Socket, _Port, _RemoteMac) -> ?nif_stub.
 bt_socket_send_nif(_Socket, _Data)                -> ?nif_stub.
 bt_socket_receive_nif(_Socket)                    -> ?nif_stub.
-close_socket_nif(_Socket)                         -> ?nif_stub.
+bt_close_socket_nif(_Socket)                      -> ?nif_stub.
 
 %%
 %%%%%%%%%%%%%%%
