@@ -26,7 +26,7 @@
 %%%-------------------------------------------------------------------
 -module(bluetooth_interface).
 
--export([create_rfcomm_socket/0, close_socket/1]).
+-export([create_rfcomm_socket/0, close_bt_socket/1]).
 -export([create_hci_socket/0]).
 -export([bind_bt_socket_any_device/2, bind_bt_socket/3]).
 -export([bt_socket_listen/1, bt_socket_accept/1, bt_socket_connect/3]).
@@ -75,10 +75,10 @@ create_rfcomm_socket() ->
 create_hci_socket() ->
     create_hci_socket_nif().
 
--spec(close_socket(socket()) -> ok | {error, error_code()}).
+-spec(close_bt_socket(socket()) -> ok | {error, error_code()}).
 %%% @doc This closes a bluetooth socket
-close_socket(Socket) ->
-    close_socket_nif(Socket).
+close_bt_socket(Socket) ->
+    bt_close_socket_nif(Socket).
 
 -spec(bind_bt_socket_any_device(socket(), bt_channel()) ->
 	     ok | {error, error_code()}).

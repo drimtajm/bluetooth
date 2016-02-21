@@ -408,7 +408,7 @@ static ErlNifFunc nif_funcs[] =
     {"bt_socket_connect_nif",        3, socket_connect_nif},
     {"bt_socket_receive_nif",        1, socket_receive_nif},
     {"bt_socket_send_nif",           2, socket_send_nif},
-    {"close_socket_nif",             1, close_socket_nif}
+    {"bt_close_socket_nif",          1, close_socket_nif}
   };
 
 ERL_NIF_INIT(bluetooth_interface, nif_funcs, load, NULL, NULL, NULL)
