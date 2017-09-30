@@ -16,6 +16,7 @@
 
 #include <stdint.h>
 #include <unistd.h>
+#include <fcntl.h>
 #include <errno.h>
 #include <sys/socket.h>
 #include <string.h>
@@ -23,6 +24,7 @@
 #ifdef __ARM_EABI__
 // ARM architecture, we're probably on a Raspberry Pi. Include "real" Bluez headers
 #include <bluetooth/bluetooth.h>
+#include <bluetooth/l2cap.h>
 #include <bluetooth/rfcomm.h>
 #include <bluetooth/hci.h>
 #include <bluetooth/hci_lib.h>
@@ -34,6 +36,8 @@
 #include "erl_nif.h"
 
 #define DEBUG 0
+#define ATT_CID           4
+#define ATT_OP_READ_REQ   0x0A
 
 static ERL_NIF_TERM atom_ok;
 static ERL_NIF_TERM atom_error;
@@ -75,7 +79,20 @@ static ERL_NIF_TERM make_error(ErlNifEnv *env, const int error_code) {
 static ERL_NIF_TERM create_rfcomm_socket_nif(ErlNifEnv *env, int argc,
 					     const ERL_NIF_TERM argv[]) {
   int optval;
-  int result = socket(AF_BLUETOOTH, SOCK_STREAM, BTPROTO_RFCOMM);
+  int result = socket(PF_BLUETOOTH, SOCK_STREAM, BTPROTO_RFCOMM);
+  if (result < 0) {
+    result = errno;
+    return make_error(env, result);
+  }
+  optval = 1;
+  setsockopt(result, SOL_SOCKET, SO_REUSEADDR, &optval, sizeof(optval));
+  return enif_make_tuple(env, 2, atom_ok, enif_make_int(env, result));
+}
+
+static ERL_NIF_TERM create_l2cap_socket_nif(ErlNifEnv *env, int argc,
+					    const ERL_NIF_TERM argv[]) {
+  int optval;
+  int result = socket(PF_BLUETOOTH, SOCK_SEQPACKET, BTPROTO_L2CAP);
   if (result < 0) {
     result = errno;
     return make_error(env, result);
@@ -218,8 +235,8 @@ static ERL_NIF_TERM set_local_name_nif(ErlNifEnv *env, int argc,
   return atom_ok;
 }
 
-static ERL_NIF_TERM bind_socket_nif(ErlNifEnv *env, int argc,
-				    const ERL_NIF_TERM argv[]) {
+static ERL_NIF_TERM bind_rfcomm_socket_nif(ErlNifEnv *env, int argc,
+					   const ERL_NIF_TERM argv[]) {
   int sock, port, result;
   struct sockaddr_rc local_address = { 0 };
   char mac_address[18];
@@ -246,8 +263,8 @@ static ERL_NIF_TERM bind_socket_nif(ErlNifEnv *env, int argc,
   return atom_ok;
 }
 
-static ERL_NIF_TERM bind_socket_any_nif(ErlNifEnv *env, int argc,
-					const ERL_NIF_TERM argv[]) {
+static ERL_NIF_TERM bind_rfcomm_socket_any_nif(ErlNifEnv *env, int argc,
+					       const ERL_NIF_TERM argv[]) {
   int sock, port, result;
   struct sockaddr_rc local_address = { 0 };
   if (!enif_get_int(env, argv[0], &sock) || (sock < 0)) {
@@ -261,6 +278,44 @@ static ERL_NIF_TERM bind_socket_any_nif(ErlNifEnv *env, int argc,
   local_address.rc_channel = (uint8_t)port;
   result =
     bind(sock, (struct sockaddr *)&local_address, sizeof(local_address));
+  if (result < 0) {
+    result = errno;
+    return make_error(env, result);
+  }
+  return atom_ok;
+}
+
+static ERL_NIF_TERM bind_l2cap_socket_any_nif(ErlNifEnv *env, int argc,
+					      const ERL_NIF_TERM argv[]) {
+  int sock, result, sock_flags;
+  struct sockaddr_l2 local_address;
+  struct bt_security security_level;
+  memset(&security_level, 0, sizeof(security_level));
+  memset(&local_address, 0, sizeof(local_address));
+  if (!enif_get_int(env, argv[0], &sock) || (sock < 0)) {
+    return enif_make_badarg(env);
+  }
+  local_address.l2_family = AF_BLUETOOTH;
+  bacpy(&local_address.l2_bdaddr, BDADDR_ANY);
+  local_address.l2_cid = htobs((uint16_t)ATT_CID);
+  local_address.l2_bdaddr_type = BDADDR_LE_PUBLIC;
+  sock_flags=fcntl(sock, F_GETFL, 0);
+  fcntl(sock, F_SETFL, (sock_flags & (~O_NONBLOCK)));
+  result =
+    bind(sock, (struct sockaddr *)&local_address, sizeof(local_address));
+  if (result < 0) {
+    result = errno;
+    return make_error(env, result);
+  }
+  security_level.level = BT_SECURITY_LOW;
+  result =
+    setsockopt(sock, SOL_BLUETOOTH, BT_SECURITY, &security_level,
+	       sizeof(security_level));
+  if (result == ENOPROTOOPT) {
+    int opt = 0;
+    result =
+      setsockopt(sock, SOL_L2CAP, L2CAP_LM, &opt, sizeof(opt));
+  }
   if (result < 0) {
     result = errno;
     return make_error(env, result);
@@ -301,8 +356,8 @@ static ERL_NIF_TERM socket_accept_nif(ErlNifEnv *env, int argc,
 			 enif_make_string(env, buffer, ERL_NIF_LATIN1));
 }
 
-static ERL_NIF_TERM socket_connect_nif(ErlNifEnv *env, int argc,
-				       const ERL_NIF_TERM argv[]) {
+static ERL_NIF_TERM connect_rfcomm_socket_nif(ErlNifEnv *env, int argc,
+					      const ERL_NIF_TERM argv[]) {
   int sock, result, port;
   struct sockaddr_rc remote_address = { 0 };
   char mac_address[18];
@@ -318,6 +373,32 @@ static ERL_NIF_TERM socket_connect_nif(ErlNifEnv *env, int argc,
   remote_address.rc_family = AF_BLUETOOTH;
   str2ba(mac_address, &remote_address.rc_bdaddr);
   remote_address.rc_channel = (uint8_t)port;
+  result =
+    connect(sock, (struct sockaddr *)&remote_address, sizeof(remote_address));
+  if (result < 0) {
+    result = errno;
+    return make_error(env, result);
+  }
+  return atom_ok;
+}
+
+static ERL_NIF_TERM connect_l2cap_socket_nif(ErlNifEnv *env, int argc,
+					     const ERL_NIF_TERM argv[]) {
+  int sock, result;
+  struct sockaddr_l2 remote_address;
+  char mac_address[18];
+  memset(&remote_address, 0, sizeof(remote_address));
+  if (!enif_get_int(env, argv[0], &sock) || (sock < 0)) {
+    return enif_make_badarg(env);
+  }
+  if (enif_get_string(env, argv[1], mac_address, 18, ERL_NIF_LATIN1) <= 0) {
+    return enif_make_badarg(env);
+  }
+  remote_address.l2_family = AF_BLUETOOTH;
+  str2ba(mac_address, &remote_address.l2_bdaddr);
+  remote_address.l2_cid = htobs((uint16_t)ATT_CID);
+  remote_address.l2_bdaddr_type = BDADDR_LE_RANDOM;
+
   result =
     connect(sock, (struct sockaddr *)&remote_address, sizeof(remote_address));
   if (result < 0) {
@@ -377,6 +458,39 @@ static ERL_NIF_TERM socket_receive_nif(ErlNifEnv *env, int argc,
 			 enif_make_binary(env, &bin));
 }
 
+static ERL_NIF_TERM read_gatt_nif(ErlNifEnv *env, int argc,
+				  const ERL_NIF_TERM argv[]) {
+  int sock, handle;
+  ssize_t result;
+  unsigned char buffer[1024] = { 0 };
+  ErlNifBinary bin;
+  if (!enif_get_int(env, argv[0], &sock) || (sock < 0)) {
+    return enif_make_badarg(env);
+  }
+  if (!enif_get_int(env, argv[1], &handle) || (handle < 0)) {
+    return enif_make_badarg(env);
+  }
+  buffer[0] = ATT_OP_READ_REQ;
+  bt_put_unaligned(htobs((uint16_t)handle), (uint16_t *)&buffer[1]);
+  result = send(sock, buffer, 3, 0);
+  if (result <= 0) {
+    result = errno;
+    return make_error(env, result);
+  }
+  result = recv(sock, buffer, sizeof(buffer), 0);
+  if (result <= 1) {
+    result = errno;
+    return make_error(env, result);
+  }
+  if (!enif_alloc_binary(result-1, &bin)) {
+    return enif_make_tuple(env, 2, atom_error,
+			   enif_make_atom(env, "allocation_failed"));
+  }
+  memcpy(bin.data, &buffer[1], result);
+  return enif_make_tuple(env, 3, atom_ok, enif_make_int(env, result),
+			 enif_make_binary(env, &bin));
+}
+
 static ERL_NIF_TERM close_socket_nif(ErlNifEnv *env, int argc,
 				     const ERL_NIF_TERM argv[]) {
   int sock, result;
@@ -395,21 +509,24 @@ static ERL_NIF_TERM close_socket_nif(ErlNifEnv *env, int argc,
 
 static ErlNifFunc nif_funcs[] =
   {
-    {"create_rfcomm_socket_nif",     0, create_rfcomm_socket_nif},
-    {"create_hci_socket_nif",        0, create_hci_socket_nif},
-    {"discover_potential_peers_nif", 2, discover_potential_peers_nif},
-    {"get_remote_name_nif",          2, get_remote_name_nif},
-    {"get_local_name_nif",           1, get_local_name_nif},
-    {"set_local_name_nif",           2, set_local_name_nif},
-    {"bind_bt_socket_any_nif",       2, bind_socket_any_nif},
-    {"bind_bt_socket_nif",           3, bind_socket_nif},
-    {"bt_socket_listen_nif",         1, socket_listen_nif},
-    {"bt_socket_accept_nif",         1, socket_accept_nif},
-    {"bt_socket_connect_nif",        3, socket_connect_nif},
-    {"bt_socket_receive_nif",        1, socket_receive_nif},
-    {"bt_socket_send_nif",           2, socket_send_nif},
-    {"bt_close_socket_nif",          1, close_socket_nif}
+    {"create_bt_socket_nif",            0, create_rfcomm_socket_nif},
+    {"create_hci_socket_nif",           0, create_hci_socket_nif},
+    {"create_ble_socket_nif",           0, create_l2cap_socket_nif},
+    {"discover_potential_bt_peers_nif", 2, discover_potential_peers_nif},
+    {"get_remote_name_nif",             2, get_remote_name_nif},
+    {"get_local_name_nif",              1, get_local_name_nif},
+    {"set_local_name_nif",              2, set_local_name_nif},
+    {"bind_bt_socket_any_nif",          2, bind_rfcomm_socket_any_nif},
+    {"bind_bt_socket_nif",              3, bind_rfcomm_socket_nif},
+    {"bind_ble_socket_any_nif",         1, bind_l2cap_socket_any_nif},
+    {"listen_bt_socket_nif",            1, socket_listen_nif},
+    {"accept_bt_socket_nif",            1, socket_accept_nif},
+    {"connect_bt_socket_nif",           3, connect_rfcomm_socket_nif},
+    {"connect_ble_socket_nif",          2, connect_l2cap_socket_nif},
+    {"read_ble_value_nif",              2, read_gatt_nif},
+    {"receive_from_bt_socket_nif",      1, socket_receive_nif},
+    {"send_to_bt_socket_nif",           2, socket_send_nif},
+    {"close_socket_nif",                1, close_socket_nif}
   };
 
 ERL_NIF_INIT(bluetooth_interface, nif_funcs, load, NULL, NULL, NULL)
-

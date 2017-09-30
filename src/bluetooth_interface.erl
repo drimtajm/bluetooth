@@ -26,11 +26,13 @@
 %%%-------------------------------------------------------------------
 -module(bluetooth_interface).
 
--export([create_rfcomm_socket/0, close_bt_socket/1]).
--export([create_hci_socket/0]).
+-export([create_bt_socket/0, create_hci_socket/0, create_ble_socket/0]).
+-export([close_socket/1]).
 -export([bind_bt_socket_any_device/2, bind_bt_socket/3]).
+-export([bind_ble_socket_any_device/1]).
 -export([bt_socket_listen/1, bt_socket_accept/1, bt_socket_connect/3]).
 -export([bt_socket_send/2, bt_socket_receive/1]).
+-export([connect_ble_socket/2, read_ble_value/2]).
 -export([mac_address_to_string/1]).
 -export([discover/0, discover/1]).
 -export([get_remote_name/1, get_local_name/0, set_local_name/1]).
@@ -67,18 +69,21 @@ on_load() ->
     Filename = filename:join(PrivDir, ?MODULE),
     ok = erlang:load_nif(Filename, 0).
 
--spec(create_rfcomm_socket() -> {ok, socket()} | {error, error_code()}).
+-spec(create_bt_socket() -> {ok, socket()} | {error, error_code()}).
 %%% @doc This creates an RFCOMM bluetooth socket and returns the socket handle
-create_rfcomm_socket() ->
-    create_rfcomm_socket_nif().
+create_bt_socket() ->
+    create_bt_socket_nif().
 
 create_hci_socket() ->
     create_hci_socket_nif().
 
--spec(close_bt_socket(socket()) -> ok | {error, error_code()}).
+create_ble_socket() ->
+    create_ble_socket_nif().
+
+-spec(close_socket(socket()) -> ok | {error, error_code()}).
 %%% @doc This closes a bluetooth socket
-close_bt_socket(Socket) ->
-    bt_close_socket_nif(Socket).
+close_socket(Socket) ->
+    close_socket_nif(Socket).
 
 -spec(bind_bt_socket_any_device(socket(), bt_channel()) ->
 	     ok | {error, error_code()}).
@@ -95,6 +100,8 @@ bind_bt_socket(Socket, Channel, MacAddressString) ->
 %%    MacAddressString = mac_address_to_string(MacAddress),
     bind_bt_socket_nif(Socket, Channel, MacAddressString).
 
+bind_ble_socket_any_device(Socket) ->
+   bind_ble_socket_any_nif(Socket).
 
 mac_address_to_string(MacAddress) ->
     {A, B, C, D, E, F} = MacAddress,
@@ -103,20 +110,20 @@ mac_address_to_string(MacAddress) ->
 		    [A, B, C, D, E, F])).
 
 bt_socket_listen(Socket) ->
-    bt_socket_listen_nif(Socket).
+    listen_bt_socket_nif(Socket).
 
 bt_socket_accept(Socket) ->
-    bt_socket_accept_nif(Socket).
+    accept_bt_socket_nif(Socket).
 
 bt_socket_connect(Socket, Port, MacAddressString) ->
     %%MacAddressString = mac_address_to_string(RemoteMac),
-    bt_socket_connect_nif(Socket, Port, MacAddressString).
+    connect_bt_socket_nif(Socket, Port, MacAddressString).
 
 bt_socket_send(Socket, Data) ->
-    bt_socket_send_nif(Socket, Data).
+    send_to_bt_socket_nif(Socket, Data).
 
 bt_socket_receive(Socket) ->
-    bt_socket_receive_nif(Socket).
+    receive_from_bt_socket_nif(Socket).
 
 discover() ->
     discover([]).
@@ -127,46 +134,56 @@ discover(Options) when is_list(Options) ->
     NumCycles = proplists:get_value(num_discovery_cycles, Options,
 				    ?DEFAULT_NUM_DISCOVERY_CYCLES),
     MaxRsp = proplists:get_value(max_rsp, Options, ?DEFAULT_MAX_RSP),
-    discover_potential_peers_nif(NumCycles, MaxRsp).
+    discover_potential_bt_peers_nif(NumCycles, MaxRsp).
+
+connect_ble_socket(Socket, RemoteMac) ->
+    connect_ble_socket_nif(Socket, RemoteMac).
+
+read_ble_value(Socket, Handle) ->
+    read_ble_value_nif(Socket, Handle).
 
 get_remote_name(MacAddress) when is_tuple(MacAddress) ->
     get_remote_name(mac_address_to_string(MacAddress));
 get_remote_name(MacAddress) ->
     {ok, Socket} = create_hci_socket(),
     {ok, Name} = get_remote_name_nif(Socket, MacAddress),
-    close_bt_socket(Socket),
+    close_socket(Socket),
     {ok, Name}.
 
 get_local_name() ->
     {ok, Socket} = create_hci_socket(),
     Result = get_local_name_nif(Socket),
-    close_bt_socket(Socket),
+    close_socket(Socket),
     Result.
 
 set_local_name(Name) when is_list(Name) ->
     {ok, Socket} = create_hci_socket(),
     Result = set_local_name_nif(Socket, Name),
-    close_bt_socket(Socket),
+    close_socket(Socket),
     Result.
 
 
 %%%%%%%%%%%%%%%
 %% Define stubs for NIF functions
 
-create_rfcomm_socket_nif()                        -> ?nif_stub.
+create_bt_socket_nif()                            -> ?nif_stub.
 create_hci_socket_nif()                           -> ?nif_stub.
-discover_potential_peers_nif(_NumCycles, _MaxRsp) -> ?nif_stub.
+create_ble_socket_nif()                           -> ?nif_stub.
+discover_potential_bt_peers_nif(_NumCycles, _MaxRsp) -> ?nif_stub.
 get_remote_name_nif(_Socket, _MacAddress)         -> ?nif_stub.
 get_local_name_nif(_Socket)                       -> ?nif_stub.
 set_local_name_nif(_Socket, _Name)                -> ?nif_stub.
 bind_bt_socket_any_nif(_Socket, _Channel)         -> ?nif_stub.
 bind_bt_socket_nif(_Socket, _Channel, _Mac)       -> ?nif_stub.
-bt_socket_listen_nif(_Socket)                     -> ?nif_stub.
-bt_socket_accept_nif(_Socket)                     -> ?nif_stub.
-bt_socket_connect_nif(_Socket, _Port, _RemoteMac) -> ?nif_stub.
-bt_socket_send_nif(_Socket, _Data)                -> ?nif_stub.
-bt_socket_receive_nif(_Socket)                    -> ?nif_stub.
-bt_close_socket_nif(_Socket)                      -> ?nif_stub.
+bind_ble_socket_any_nif(_Socket)                  -> ?nif_stub.
+listen_bt_socket_nif(_Socket)                     -> ?nif_stub.
+accept_bt_socket_nif(_Socket)                     -> ?nif_stub.
+connect_bt_socket_nif(_Socket, _Port, _RemoteMac) -> ?nif_stub.
+connect_ble_socket_nif(_Socket, _RemoteMac)       -> ?nif_stub.
+read_ble_value_nif(_Socket, _Handle)              -> ?nif_stub.
+send_to_bt_socket_nif(_Socket, _Data)             -> ?nif_stub.
+receive_from_bt_socket_nif(_Socket)               -> ?nif_stub.
+close_socket_nif(_Socket)                         -> ?nif_stub.
 
 %%
 %%%%%%%%%%%%%%%
